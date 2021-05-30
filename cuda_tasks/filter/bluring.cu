@@ -1,4 +1,3 @@
-%%writefile bluring.cu
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -22,17 +21,14 @@ __global__ void filter(uint8_t* d_image, uint8_t* d_image_result, double *d_filt
     int ind = x * w * 3 + y * 3 + s;
 
     if (globalidx < size) {
-        if (y == w - 1 || x == h - 1 || y == 0 || x == 0) {
-            d_image_result[ind] = d_image[ind];
-        } else {
-            int value = 0;
-            for (int i = 0; i < 3; ++i) {
-                for (int j = 0; j < 3; ++j) {
+        int value = 0;
+        for (int i = 0; i < 3; ++i) {
+            for (int j = 0; j < 3; ++j) {
+                if (x + i - 1 >= 0 && x + i - 1 < h && y + j - 1 >= 0 && y + j - 1 < w)
                     value += d_filter_kernel[i * 3 + j] * d_image[(x + i - 1) * w * 3 + (y + j - 1) * 3 + s];
-                }
             }
-            d_image_result[ind] = value;
         }
+        d_image_result[ind] = value;
     }
 }
 
@@ -43,15 +39,19 @@ int main(int argc, char **argv)
 
     uint8_t* d_image;
     uint8_t* d_image_result;
-    cudaMalloc(&d_image, sizeof(uint8_t) * size);
-    cudaMalloc(&d_image_result, sizeof(uint8_t) * size);
-
-    uint8_t* h_image_result = (uint8_t *)malloc(sizeof(uint8_t) * size);
 
     for (int i = 0; i < 9; ++i) {
         h_filter_kernel[i] = i % 2 == 0 ? 1/20. : 2/20.;
     }
     h_filter_kernel[4] = 1/10.;
+
+    // second kernel
+    /*
+    for (int i = 0; i < 9; ++i) {
+        h_filter_kernel[i] = i % 2 == 0 ? 1/10. : -1/20.;
+    }
+    h_filter_kernel[4] = 1/8.;
+     */
 
     cudaMalloc(&d_filter_kernel, sizeof(double) * 9);
     cudaMemcpy(d_filter_kernel, h_filter_kernel, sizeof(double) * 9, cudaMemcpyHostToDevice);
@@ -61,6 +61,11 @@ int main(int argc, char **argv)
     uint8_t* h_image = stbi_load("image.png", &width, &height, &bpp, 3);
 
     int size = height * width * 3;
+
+    cudaMalloc(&d_image, sizeof(uint8_t) * size);
+    cudaMalloc(&d_image_result, sizeof(uint8_t) * size);
+
+    uint8_t* h_image_result = (uint8_t *)malloc(sizeof(uint8_t) * size);
 
     cudaMemcpy(d_image, h_image, sizeof(uint8_t) * size, cudaMemcpyHostToDevice);
 
